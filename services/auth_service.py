@@ -24,9 +24,12 @@ def authenticate_user(email, password):
 def check_user_needs_password_setup(email):
     """Check if user exists but needs password setup."""
     user = fetch_user_by_email(email)
-    if user and not user["password_hash"]:
-        return True, user
-    return False, None
+    if user:
+        if not user["password_hash"]:
+            return True, user  # Needs password setup
+        else:
+            return False, user  # Has password, ready to login
+    return False, None  # User doesn't exist
 
 def create_user_password(email, password):
     """Set password for first-time login."""
