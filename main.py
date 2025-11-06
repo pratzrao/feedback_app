@@ -23,8 +23,6 @@ if "user_roles" not in st.session_state:
 # Pages
 pages = {
     "Login": st.Page("login.py", title="Log in", icon=":material/login:", default=True),
-    "Password Setup": st.Page("password_setup.py", title="Set Password", icon=":material/key:"),
-    "Forgot Password": st.Page("forgot_password.py", title="Reset Password", icon=":material/lock_reset:"),
     "Logout": st.Page(logout, title="Log out", icon=":material/logout:"),
 }
 
@@ -96,7 +94,7 @@ if st.session_state["authenticated"]:
         
         pg = st.navigation(nav_sections)
 else:
-    # Not authenticated - login options only
-    pg = st.navigation([pages["Login"], pages["Password Setup"], pages["Forgot Password"]])
+    # Not authenticated - login only
+    pg = st.navigation([pages["Login"]])
 
 pg.run()

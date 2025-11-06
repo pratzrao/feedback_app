@@ -461,9 +461,9 @@ def get_feedback_progress_for_user(user_id):
     query = """
         SELECT 
             COUNT(*) as total_requests,
-            SUM(CASE WHEN fr.status = 'completed' THEN 1 ELSE 0 END) as completed_requests,
-            SUM(CASE WHEN fr.status = 'approved' THEN 1 ELSE 0 END) as pending_requests,
-            SUM(CASE WHEN fr.approval_status = 'pending' THEN 1 ELSE 0 END) as awaiting_approval
+            COALESCE(SUM(CASE WHEN fr.status = 'completed' THEN 1 ELSE 0 END), 0) as completed_requests,
+            COALESCE(SUM(CASE WHEN fr.status = 'approved' THEN 1 ELSE 0 END), 0) as pending_requests,
+            COALESCE(SUM(CASE WHEN fr.approval_status = 'pending' THEN 1 ELSE 0 END), 0) as awaiting_approval
         FROM feedback_requests fr
         WHERE fr.requester_id = ? AND fr.status != 'rejected'
     """
