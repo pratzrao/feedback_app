@@ -1,7 +1,11 @@
 import smtplib
-from email.mime.text import MimeText
-from email.mime.multipart import MimeMultipart
 import streamlit as st
+try:
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+except ImportError:
+    from email.MIMEText import MIMEText
+    from email.MIMEMultipart import MIMEMultipart
 
 def send_email(to_email, subject, body):
     """Send email using SMTP."""
@@ -14,12 +18,12 @@ def send_email(to_email, subject, body):
             email_password = st.secrets["email"]["email_password"]
             
             # Create message
-            msg = MimeMultipart()
+            msg = MIMEMultipart()
             msg['From'] = email_user
             msg['To'] = to_email
             msg['Subject'] = subject
             
-            msg.attach(MimeText(body, 'html'))
+            msg.attach(MIMEText(body, 'html'))
             
             # Send email
             server = smtplib.SMTP(smtp_server, smtp_port)
@@ -85,3 +89,40 @@ def send_rejection_notice_email(requester_email, reviewer_name, rejection_reason
     <p>Thank you!</p>
     """
     return send_email(requester_email, subject, body)
+
+def send_password_reset_email(email, first_name, reset_token):
+    """Send password reset email with token."""
+    subject = "Password Reset - 360° Feedback System"
+    body = f"""
+    <h2>Password Reset Request</h2>
+    <p>Hello {first_name},</p>
+    <p>You have requested to reset your password for the 360° Feedback System.</p>
+    
+    <div style="background-color: #f0f0f0; padding: 15px; margin: 20px 0; border-radius: 5px;">
+        <h3>Your Reset Token:</h3>
+        <p style="font-family: monospace; font-size: 16px; font-weight: bold; color: #333;">
+            {reset_token}
+        </p>
+    </div>
+    
+    <p><strong>Instructions:</strong></p>
+    <ol>
+        <li>Copy the reset token above</li>
+        <li>Return to the login page</li>
+        <li>Click "Forgot Password?" again</li>
+        <li>Select "I have a reset token"</li>
+        <li>Paste the token and create your new password</li>
+    </ol>
+    
+    <p><strong>Important:</strong></p>
+    <ul>
+        <li>This token expires in 24 hours</li>
+        <li>Use this token only once</li>
+        <li>If you didn't request this reset, please contact your administrator</li>
+    </ul>
+    
+    <p>If you have any issues, please contact your system administrator.</p>
+    
+    <p>Best regards,<br>360° Feedback System</p>
+    """
+    return send_email(email, subject, body)
