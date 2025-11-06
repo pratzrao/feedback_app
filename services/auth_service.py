@@ -61,11 +61,10 @@ def generate_password_reset_token(email):
         
         # Send reset email
         from services.email_service import send_password_reset_email
-        reset_url = f"Reset Token: {reset_token}"  # In production, this would be a full URL
         if send_password_reset_email(email, user['first_name'], reset_token):
             return True, "Password reset email sent successfully!"
         else:
-            return True, "Reset token generated. Please check your email or contact administrator."
+            return False, "Failed to send password reset email. Please contact your administrator."
             
     except Exception as e:
         print(f"Error generating reset token: {e}")

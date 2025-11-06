@@ -1,7 +1,14 @@
 import streamlit as st
-from services.db_helper import get_pending_reviews_for_user
+from services.db_helper import get_pending_reviews_for_user, get_active_review_cycle
 
 st.title("Reviews to Complete")
+
+# Check if there's an active review cycle
+active_cycle = get_active_review_cycle()
+if not active_cycle:
+    st.warning("⚠️ No active review cycle found. Contact HR to start a new feedback cycle.")
+else:
+    st.info(f"**Active Cycle:** {active_cycle['cycle_name']} | **Feedback Deadline:** {active_cycle['feedback_deadline']}")
 
 user_id = st.session_state["user_data"]["user_type_id"]
 

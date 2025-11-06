@@ -5,10 +5,18 @@ from io import BytesIO
 from services.db_helper import (
     get_anonymized_feedback_for_user, 
     get_feedback_progress_for_user,
-    generate_feedback_excel_data
+    generate_feedback_excel_data,
+    get_active_review_cycle
 )
 
 st.title("My Feedback Results")
+
+# Check if there's an active review cycle
+active_cycle = get_active_review_cycle()
+if not active_cycle:
+    st.warning("⚠️ No active review cycle found. Historical data shown below may be from previous cycles.")
+else:
+    st.info(f"**Active Cycle:** {active_cycle['cycle_name']} | **Feedback Deadline:** {active_cycle['feedback_deadline']}")
 
 user_id = st.session_state["user_data"]["user_type_id"]
 

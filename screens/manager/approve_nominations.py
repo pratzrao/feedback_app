@@ -1,10 +1,18 @@
 import streamlit as st
 from services.db_helper import (
     get_pending_approvals_for_manager,
-    approve_reject_feedback_request
+    approve_reject_feedback_request,
+    get_active_review_cycle
 )
 
 st.title("Approve Team Nominations")
+
+# Check if there's an active review cycle
+active_cycle = get_active_review_cycle()
+if not active_cycle:
+    st.warning("⚠️ No active review cycle found. Contact HR to start a new feedback cycle.")
+else:
+    st.info(f"**Active Cycle:** {active_cycle['cycle_name']} | **Nomination Deadline:** {active_cycle['nomination_deadline']}")
 
 user_id = st.session_state["user_data"]["user_type_id"]
 manager_name = f"{st.session_state['user_data']['first_name']} {st.session_state['user_data']['last_name']}"

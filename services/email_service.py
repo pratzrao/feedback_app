@@ -16,10 +16,11 @@ def send_email(to_email, subject, body):
             smtp_port = st.secrets["email"]["smtp_port"]
             email_user = st.secrets["email"]["email_user"]
             email_password = st.secrets["email"]["email_password"]
+            from_email = st.secrets["email"].get("from_email", email_user)
             
             # Create message
             msg = MIMEMultipart()
-            msg['From'] = email_user
+            msg['From'] = from_email
             msg['To'] = to_email
             msg['Subject'] = subject
             
@@ -30,7 +31,7 @@ def send_email(to_email, subject, body):
             server.starttls()
             server.login(email_user, email_password)
             text = msg.as_string()
-            server.sendmail(email_user, to_email, text)
+            server.sendmail(from_email, to_email, text)
             server.quit()
             
             return True
