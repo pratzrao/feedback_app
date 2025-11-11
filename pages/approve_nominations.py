@@ -67,7 +67,7 @@ else:
 
                     with col_approve:
                         if st.button(
-                            f"[Approve] Approve",
+                            "Approve",
                             key=f"approve_{request_id}",
                             type="primary",
                         ):
@@ -80,7 +80,7 @@ else:
                                 st.error("[Error] Error approving request.")
 
                     with col_reject:
-                        if st.button(f"[Reject] Reject", key=f"reject_{request_id}"):
+                        if st.button(f"Reject", key=f"reject_{request_id}"):
                             st.session_state[f"show_reject_form_{request_id}"] = True
 
                     # Rejection form
@@ -130,7 +130,8 @@ else:
     st.subheader("Approval Guidelines")
 
     with st.expander("[Guidelines] What to consider when approving nominations"):
-        st.write("""
+        st.write(
+            """
         **Approve nominations when:**
         - The reviewer has direct working experience with the requester
         - The relationship type is accurately declared
@@ -147,10 +148,15 @@ else:
         - Rejected nominations cannot be resubmitted for the same reviewer
         - The requester will receive your rejection reason
         - Approved requests will be sent directly to the reviewers
-        """)
+        """
+        )
 
     # Show notification about external stakeholders
-    st.info("[Info] **Note:** Only manager-level employees and above can request feedback from external stakeholders. The system automatically enforces this rule.")
+    st.info(
+        "[Info] **Note:** Only manager-level employees and above can request feedback from external stakeholders. The system automatically enforces this rule."
+    )
 
     if pending_approvals:
-        st.warning("[Action] **Action Required:** Please review and approve/reject these nominations promptly to keep the feedback process on track.")
+        st.warning(
+            "[Action] **Action Required:** Please review and approve/reject these nominations promptly to keep the feedback process on track."
+        )

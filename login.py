@@ -43,7 +43,7 @@ if not st.session_state["authenticated"]:
 
         if needs_setup:
             # First time login - password setup
-            st.subheader(f"Welcome! Set up your password")
+            st.subheader("Welcome! Set up your password")
             st.info(f"Email: {email}")
 
             with st.form("password_setup_form"):
@@ -77,7 +77,7 @@ if not st.session_state["authenticated"]:
 
             with st.form("password_form"):
                 password = st.text_input("Password", type="password")
-                
+
                 # Buttons on the same line - Login on left, Forgot Password on right
                 col1, col2 = st.columns([1, 1])
                 with col1:
