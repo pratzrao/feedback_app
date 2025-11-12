@@ -1,5 +1,7 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import base64  # Import base64
+import json
 from pathlib import Path
 from services.db_helper import (
     get_manager_level_from_designation,
@@ -144,6 +146,48 @@ a, [data-testid="baseButton-secondary"] {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* Sidebar navigation badges */
+[data-testid="stSidebarNav"] [data-testid="stSidebarNavLink"] span.nav-label--with-badge {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+[data-testid="stSidebarNav"] .nav-label__text {
+    display: inline;
+    transition: font-weight 0.15s ease;
+}
+
+[data-testid="stSidebarNav"] [data-testid="stSidebarNavLink"][aria-current="page"] .nav-label__text {
+    font-weight: 600;
+}
+
+[data-testid="stSidebarNav"] .nav-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    color: #E55325 !important;
+    line-height: 1;
+    margin-left: 0.35rem;
+}
+
+[data-testid="stSidebarNav"] .nav-badge__dot {
+    display: inline-block;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background-color: #E55325;
+    flex-shrink: 0;
+}
+
+[data-testid="stSidebarNav"] .nav-badge__count {
+    color: #E55325 !important;
+    font-weight: 600;
+    font-size: 0.8rem;
+    line-height: 1;
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -231,11 +275,8 @@ def _badge_title(title: str, notifications: set, counts: dict) -> str:
         return title
     count = counts.get(title, 0)
     if count > 0:
-        # Use an orange circle and show the count
-        return f"{title} 🟠 {count}"
-    if title in notifications:
-        # Fallback: show dot without a count
-        return f"{title} 🟠"
+        # Fallback text for badge counts; visual badge handled via injected JS/CSS
+        return f"{title} ({count})"
     return title
 
 
@@ -491,6 +532,206 @@ if st.session_state["authenticated"]:
 
     # Render built-in sidebar navigation for stability
     pg = st.navigation(nav_sections, position="sidebar")
+    if BADGES_ENABLED:
+        badge_counts_payload = json.dumps(badge_counts)
+        dot_only_payload = json.dumps(
+            sorted(list(notes_set - set(badge_counts.keys())))
+        )
+
+
+        components.html(
+            f"""
+            <script>
+            (function() {{
+                const badgeCounts = {badge_counts_payload};
+                const dotOnlyTitles = new Set({dot_only_payload});
+                const navSelector = '[data-testid="stSidebarNav"]';
+                const navLinkSelector = '[data-testid="stSidebarNavLink"]';
+                const LABEL_CONTAINER_CLASS = 'nav-label__container';
+                const LABEL_WITH_BADGE_CLASS = 'nav-label--with-badge';
+                const ICON_CLASS_HINTS = ['material-icons', 'material-symbols'];
+                const digitOnly = /^[0-9]+$/;
+
+                function isIconElement(el) {{
+                    if (!el) {{
+                        return false;
+                    }}
+                    const classAttr = typeof el.className === 'string' ? el.className : (el.getAttribute && el.getAttribute('class')) || '';
+                    if (classAttr && ICON_CLASS_HINTS.some(fragment => classAttr.includes(fragment))) {{
+                        return true;
+                    }}
+                    const ariaHidden = el.getAttribute && el.getAttribute('aria-hidden');
+                    return ariaHidden === 'true';
+                }}
+
+                function extractTitle(raw) {{
+                    if (!raw) {{
+                        return '';
+                    }}
+                    const trimmed = raw.trim();
+                    const openIdx = trimmed.lastIndexOf('(');
+                    if (openIdx === -1 || !trimmed.endsWith(')')) {{
+                        return trimmed;
+                    }}
+                    const inside = trimmed.slice(openIdx + 1, -1).trim();
+                    if (inside && digitOnly.test(inside)) {{
+                        return trimmed.slice(0, openIdx).trim();
+                    }}
+                    return trimmed;
+                }}
+
+                function findLabelContainer(link, doc) {{
+                    const existing = link.querySelector('.' + LABEL_CONTAINER_CLASS);
+                    if (existing) {{
+                        return existing;
+                    }}
+                    const spans = Array.from(link.querySelectorAll('span'));
+                    for (let i = spans.length - 1; i >= 0; i -= 1) {{
+                        const span = spans[i];
+                        if (!span) {{
+                            continue;
+                        }}
+                        if (span.classList && (span.classList.contains('nav-badge') || span.classList.contains('nav-badge__dot') || span.classList.contains('nav-badge__count'))) {{
+                            continue;
+                        }}
+                        if (span.closest && span.closest('.nav-badge')) {{
+                            continue;
+                        }}
+                        if (isIconElement(span)) {{
+                            continue;
+                        }}
+                        span.classList.add(LABEL_CONTAINER_CLASS);
+                        return span;
+                    }}
+                    return null;
+                }}
+
+                function applyBadges(doc) {{
+                    const navRoot = doc.querySelector(navSelector);
+                    if (!navRoot) {{
+                        return false;
+                    }}
+
+                    const links = Array.from(navRoot.querySelectorAll(navLinkSelector));
+                    links.forEach(link => {{
+                        const labelContainer = findLabelContainer(link, doc);
+                        if (!labelContainer) {{
+                            return;
+                        }}
+
+                        const originalRaw = labelContainer.dataset.originalLabel || labelContainer.textContent.trim();
+                        const original = extractTitle(originalRaw);
+                        if (!labelContainer.dataset.originalLabel || labelContainer.dataset.originalLabel !== original) {{
+                            labelContainer.dataset.originalLabel = original;
+                        }}
+
+                        const count = badgeCounts[original] || 0;
+                        const needsBadge = count > 0 || dotOnlyTitles.has(original);
+
+                        let textEl = labelContainer.querySelector('.nav-label__text');
+                        if (!textEl) {{
+                            textEl = doc.createElement('span');
+                            textEl.className = 'nav-label__text';
+                            textEl.textContent = original;
+                            while (labelContainer.firstChild) {{
+                                labelContainer.removeChild(labelContainer.firstChild);
+                            }}
+                            labelContainer.appendChild(textEl);
+                        }} else {{
+                            textEl.textContent = original;
+                        }}
+
+                        if (!needsBadge) {{
+                            const existingBadge = labelContainer.querySelector('.nav-badge');
+                            if (existingBadge) {{
+                                existingBadge.remove();
+                            }}
+                            labelContainer.classList.remove(LABEL_WITH_BADGE_CLASS);
+                            return;
+                        }}
+
+                        let badgeEl = labelContainer.querySelector('.nav-badge');
+                        if (!badgeEl) {{
+                            badgeEl = doc.createElement('span');
+                            badgeEl.className = 'nav-badge';
+                            const dotEl = doc.createElement('span');
+                            dotEl.className = 'nav-badge__dot';
+                            const countEl = doc.createElement('span');
+                            countEl.className = 'nav-badge__count';
+                            badgeEl.appendChild(dotEl);
+                            badgeEl.appendChild(countEl);
+                            labelContainer.appendChild(badgeEl);
+                        }}
+
+                        const countEl = badgeEl.querySelector('.nav-badge__count');
+                        if (count > 0) {{
+                            countEl.textContent = '(' + String(count) + ')';
+                            countEl.style.display = '';
+                        }} else {{
+                            countEl.textContent = '';
+                            countEl.style.display = 'none';
+                        }}
+
+                        badgeEl.style.display = 'inline-flex';
+                        labelContainer.classList.add(LABEL_WITH_BADGE_CLASS);
+                    }});
+
+                    return true;
+                }}
+
+                function bootstrap(attempts = 0) {{
+                    const MAX_ATTEMPTS = 40;
+                    try {{
+                        if (!window.parent || !window.parent.document) {{
+                            throw new Error('parent-not-ready');
+                        }}
+                        const doc = window.parent.document;
+
+                        function runApply(iteration = 0) {{
+                            if (applyBadges(doc)) {{
+                                return;
+                            }}
+                            if (iteration < MAX_ATTEMPTS) {{
+                                setTimeout(() => runApply(iteration + 1), 100);
+                            }}
+                        }}
+
+                        runApply();
+
+                        if (window.parent.__feedbackAppBadgeObserver) {{
+                            window.parent.__feedbackAppBadgeObserver.disconnect();
+                        }}
+
+                        function attachObserver(iteration = 0) {{
+                            const navRoot = doc.querySelector(navSelector);
+                            if (!navRoot) {{
+                                if (iteration < MAX_ATTEMPTS) {{
+                                    setTimeout(() => attachObserver(iteration + 1), 100);
+                                }}
+                                return;
+                            }}
+                            const observer = new MutationObserver(() => applyBadges(doc));
+                            observer.observe(navRoot, {{ childList: true, subtree: true }});
+                            window.parent.__feedbackAppBadgeObserver = observer;
+                        }}
+
+                        attachObserver();
+                    }} catch (error) {{
+                        if (attempts < MAX_ATTEMPTS) {{
+                            setTimeout(() => bootstrap(attempts + 1), 200);
+                        }}
+                    }}
+                }}
+
+                bootstrap();
+            }})();
+            </script>
+            """,
+            height=0,
+            width=0,
+        )
+
+
     current_page_title = pg.title
 else:
     # Not authenticated - login and external feedback access

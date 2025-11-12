@@ -445,9 +445,9 @@ External stakeholders can be nominated by employees (subject to manager approval
   - Token login auto-accepts and routes to feedback form.
 - Manager tools:
   - Approve team nominations.
-  - View reportees’ anonymized feedback (`pages/reportees_feedback.py`).
+  - View reportees’ anonymized feedback (`app_pages/reportees_feedback.py`).
 - HR tools:
-  - `pages/completed_feedback.py` provides named views of completed feedback.
+  - `app_pages/completed_feedback.py` provides named views of completed feedback.
   - Notifications center + reminders under Communication.
 
 Known considerations
@@ -459,36 +459,46 @@ Known considerations
 
 ```
 feedback_app/
-├── main.py                          # Main app with professional navigation
-├── login.py                         # Authentication page
+├── main.py                          # Main app with role-based navigation
+├── login.py                         # Authentication page (employees + external routing)
 ├── requirements.txt                 # Python dependencies
 ├── services/
-│   ├── db_helper.py                # Database operations
-│   ├── auth_service.py             # Authentication logic
-│   └── email_service.py            # Email notifications
-├── screens/
-│   ├── employee/                   # Employee interface
-│   │   ├── request_feedback.py     # Nomination system
-│   │   ├── my_reviews.py           # Complete reviews (merged section)
-│   │   ├── review_requests.py      # Accept/decline requests
-│   │   └── my_feedback.py          # View received feedback
-│   ├── hr/                         # HR interface (professionally organized)
-│   │   ├── dashboard.py            # Cycle management (clean interface)
-│   │   ├── overview_dashboard.py   # Activity tracking metrics
-│   │   ├── user_activity.py        # User activity monitoring
-│   │   ├── completed_feedback.py   # Feedback management
-│   │   ├── reviewer_rejections.py  # Rejection tracking
-│   │   └── manage_employees.py     # Employee management
-├── pages/
-│   ├── email_notifications.py      # Email Notifications Center (HR > Communication)
-│   ├── send_reminders.py           # Bulk/individual reminders (HR > Communication)
-│   ├── reportees_feedback.py       # Managers: view reportees' anonymized feedback
-│   └── external_auth.py            # External stakeholder login (email + token)
-├── setup/                          # Database setup & utilities
-├── testing/                        # Automated testing with MCP
-├── docs/                           # Documentation
+│   ├── db_helper.py                # Database + business logic
+│   ├── auth_service.py             # Authentication & password reset
+│   └── email_service.py            # Email notifications (SMTP/SendGrid)
+├── app_pages/
+│   ├── hr_dashboard.py             # HR: Cycle management + status
+│   ├── manage_cycle_deadlines.py   # HR: Edit deadlines
+│   ├── overview_dashboard.py       # HR: Metrics & analytics
+│   ├── user_activity.py            # HR: Activity tracking
+│   ├── completed_feedback.py       # HR: Completed feedback views
+│   ├── data_exports.py             # HR: Export CSV/XLSX
+│   ├── email_notifications.py      # HR: Email center
+│   ├── send_reminders.py           # HR: Reminder sending
+│   ├── manual_reminders.py         # HR: Manual targeting
+│   ├── manage_employees.py         # HR: User management
+│   ├── admin_overview.py           # HR: All reviews & requests
+│   ├── reviewer_rejections.py      # HR: Rejection tracking
+│   ├── reportees_feedback.py       # Managers: anonymized reportee feedback
+│   ├── approve_nominations.py      # Managers: approve/reject nominations
+│   ├── employee_dashboard.py       # Employees: overview (optional)
+│   ├── request_feedback.py         # Employees: nominate reviewers
+│   ├── review_requests.py          # Employees: accept/decline incoming requests
+│   ├── my_reviews.py               # Employees: complete reviews
+│   ├── provide_feedback.py         # Employees: provide feedback form
+│   ├── current_feedback.py         # Employees: current cycle results
+│   ├── previous_feedback.py        # Employees: past results
+│   ├── external_feedback.py        # External stakeholders: provide feedback
+│   └── external_auth.py            # External auth helpers (if used)
+├── setup/
+│   ├── create_schema.py            # Base schema (idempotent)
+│   ├── fix_workflow_schema.py      # Workflow/external schema fixes & triggers
+│   └── simple_insert.py            # Seed roles/users/questions
+├── testing/
+│   └── generate_manual_test_plan.py# Writes Manual_Test_Plan.xlsx
 └── .streamlit/
-    └── secrets.toml                # Database & email config
+    ├── config.toml                 # UI theme
+    └── secrets.toml                # DB & email config
 
 ## Email Notifications Details
 
