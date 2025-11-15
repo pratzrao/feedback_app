@@ -256,12 +256,88 @@ with tab2:
         """
         params.append(min_length)
 
+        # Add pagination for detailed reviews
+        st.markdown("### Detailed Reviews")
+        
+        # Pagination controls for detailed reviews
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            page_size = st.selectbox(
+                "Reviews per page:",
+                [10, 25, 50, 100],
+                index=1,  # Default to 25
+                help="Number of reviews to show per page"
+            )
+
+        with col2:
+            # Get total count for pagination
+            count_query = f"""
+                SELECT COUNT(DISTINCT fr.request_id)
+                FROM feedback_requests fr
+                JOIN users u1 ON fr.requester_id = u1.user_type_id
+                LEFT JOIN users u2 ON fr.reviewer_id = u2.user_type_id
+                JOIN review_cycles rc ON fr.cycle_id = rc.cycle_id
+                JOIN feedback_responses resp ON fr.request_id = resp.request_id
+                WHERE fr.workflow_state = 'completed' 
+                    AND DATE(fr.completed_at) BETWEEN ? AND ?
+            """
+            
+            count_params = [start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")]
+            
+            if selected_cycle_id:
+                count_query += " AND fr.cycle_id = ?"
+                count_params.append(selected_cycle_id)
+                
+            if relationship_filter:
+                placeholders = ",".join(["?" for _ in relationship_filter])
+                count_query += f" AND fr.relationship_type IN ({placeholders})"
+                count_params.extend(relationship_filter)
+                
+            if dept_filter:
+                placeholders = ",".join(["?" for _ in dept_filter])
+                count_query += f" AND u1.vertical IN ({placeholders})"
+                count_params.extend(dept_filter)
+            
+            count_query += " AND AVG(LENGTH(resp.response_value)) >= ?"
+            count_params.append(min_length)
+            
+            try:
+                total_reviews = conn.execute(count_query, tuple(count_params)).fetchone()[0]
+            except Exception:
+                total_reviews = 0
+            
+            if total_reviews > 0:
+                max_page = max(1, (total_reviews + page_size - 1) // page_size)
+                current_page = st.number_input(
+                    "Page:",
+                    min_value=1,
+                    max_value=max_page,
+                    value=1,
+                    step=1,
+                    help=f"Page number (1 to {max_page})"
+                )
+            else:
+                current_page = 1
+                max_page = 1
+
+        with col3:
+            if total_reviews > 0:
+                start_record = (current_page - 1) * page_size + 1
+                end_record = min(current_page * page_size, total_reviews)
+                st.write(f"**Showing {start_record}-{end_record} of {total_reviews}**")
+            else:
+                st.write("**No records found**")
+
+        # Add LIMIT and OFFSET to query
+        offset = (current_page - 1) * page_size
+        detail_query += " LIMIT ? OFFSET ?"
+        params.extend([page_size, offset])
+
         detailed_reviews = conn.execute(detail_query, tuple(params)).fetchall()
 
         if detailed_reviews:
-            st.write(
-                f"**{len(detailed_reviews)} feedback reviews** match your filters:"
-            )
+            # Display info already shown in pagination controls above
+            pass
 
             for review in detailed_reviews:
                 with st.expander(

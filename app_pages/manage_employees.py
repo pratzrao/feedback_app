@@ -1,5 +1,6 @@
 import streamlit as st
 from services.db_helper import get_connection, update_user_details
+from utils.cache_helper import invalidate_on_user_action, get_cached_user_roles
 
 st.title("Manage Employees")
 
@@ -61,6 +62,10 @@ with st.form("add_user_form"):
                     conn.commit()
                     st.success(f"Employee added successfully!")
                     st.info("Employee will need to set up their password on first login.")
+                    
+                    # Invalidate user-related caches after adding new user
+                    invalidate_on_user_action('user_added', user_id)
+                    
                     st.rerun()  # Refresh to show new employee in list
             except Exception as e:
                 st.error(f"Error adding employee: {e}")
@@ -140,6 +145,10 @@ def update_user_status(user_id, is_active):
     try:
         conn.execute(query, (is_active, user_id))
         conn.commit()
+        
+        # Invalidate user-related caches after status change
+        invalidate_on_user_action('user_modified', user_id)
+        
         return True
     except Exception as e:
         print(f"Error updating user status: {e}")

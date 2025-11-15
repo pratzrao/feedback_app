@@ -40,25 +40,16 @@ if token_data["status"] != "accepted":
 # Display header
 st.title("📝 Provide Feedback")
 
-# Show only the feedback deadline prominently
-active_cycle = get_active_review_cycle()
-if active_cycle and active_cycle.get("feedback_deadline"):
-    st.info(f"Feedback Deadline: {active_cycle['feedback_deadline']}")
-
-# Show request details
-st.subheader("Feedback Request Details")
-col1, col2, col3 = st.columns(3)
-
+# Clean header with essential info only
+col1, col2 = st.columns([2, 1])
 with col1:
-    st.write(f"**For:** {token_data['requester_name']}")
-    st.write(f"**Department:** {token_data['requester_vertical']}")
+    st.write(f"**Feedback for:** {token_data['requester_name']} ({token_data['requester_vertical']})")
+    st.write(f"**Your role:** {token_data['relationship_type'].replace('_', ' ').title()}")
 
 with col2:
-    st.write(f"**Your Role:** {token_data['relationship_type'].replace('_', ' ').title()}")
-    st.write(f"**Review Cycle:** {token_data['cycle_name']}")
-
-with col3:
-    st.write(f"**Status:** Providing Feedback")
+    active_cycle = get_active_review_cycle()
+    if active_cycle and active_cycle.get("feedback_deadline"):
+        st.info(f"**Deadline:** {active_cycle['feedback_deadline']}")
 
 st.markdown("---")
 
@@ -74,7 +65,7 @@ if "external_responses" not in st.session_state:
     st.session_state["external_responses"] = {}
 
 st.subheader("Feedback Questions")
-st.info("Your responses will remain anonymous. Please provide honest and constructive feedback.")
+st.info("💡 Your responses will remain anonymous. Please provide honest and constructive feedback.")
 
 # Create the feedback form
 responses = {}
@@ -128,31 +119,33 @@ for question in questions:
 st.session_state["external_responses"] = responses
 
 # Action buttons
-st.subheader("Submit Your Feedback")
-
-col1, col2, col3 = st.columns([2, 1, 1])
+st.markdown("---")
+col1, col2 = st.columns([3, 1])
 
 with col1:
-    if st.button("💾 Save as Draft", use_container_width=True):
-        st.success("✅ Draft saved! You can continue later with the same token.")
-        st.info("Your responses have been temporarily saved. You can return to complete them later.")
-
-with col2:
-    # Option to decline at this stage
-    if st.button("❌ Decline to Continue", use_container_width=True):
-        st.session_state["show_decline_form"] = True
-        st.rerun()
-
-with col3:
     # Submit button - check if all required fields are completed
     if not all_required_answered:
         st.button("📝 Submit Feedback", disabled=True, use_container_width=True)
         st.warning("⚠️ Please answer all text questions before submitting.")
     else:
         if st.button("📝 Submit Feedback", type="primary", use_container_width=True):
-            # Final confirmation
-            st.session_state["show_submit_confirmation"] = True
-            st.rerun()
+            # Submit directly without confirmation
+            success = complete_external_stakeholder_feedback(token_data['request_id'], responses)
+            if success:
+                st.success("🎉 Thank you! Your feedback has been submitted successfully.")
+                st.session_state["external_token_data"]["status"] = "completed"
+                # Clear responses
+                if "external_responses" in st.session_state:
+                    del st.session_state["external_responses"]
+                st.rerun()
+            else:
+                st.error("Failed to submit feedback. Please try again.")
+
+with col2:
+    # Option to decline
+    if st.button("❌ Decline", use_container_width=True):
+        st.session_state["show_decline_form"] = True
+        st.rerun()
 
 # Handle decline form
 if st.session_state.get("show_decline_form", False):
@@ -190,82 +183,19 @@ if st.session_state.get("show_decline_form", False):
             st.session_state["show_decline_form"] = False
             st.rerun()
 
-# Handle submit confirmation
-if st.session_state.get("show_submit_confirmation", False):
-    st.markdown("---")
-    st.subheader("Confirm Submission")
-    
-    with st.form("submit_confirmation"):
-        st.write("**Please confirm that you want to submit your feedback.**")
-        st.info("Once submitted, you will not be able to modify your responses.")
-        
-        # Show summary of responses
-        st.write("**Summary of your responses:**")
-        for question in questions:
-            question_id = question[0]
-            question_text = question[1]
-            question_type = question[2]
-            response_data = responses.get(question_id, {})
-            
-            if question_type == 'rating':
-                rating = response_data.get('rating_value', 'N/A')
-                st.write(f"• {question_text}: **{rating}/5**")
-            else:
-                text_resp = response_data.get('response_value', 'N/A')
-                preview = text_resp[:100] + "..." if len(text_resp) > 100 else text_resp
-                st.write(f"• {question_text}: *{preview}*")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            final_submit = st.form_submit_button("✅ Final Submit", type="primary")
-        with col2:
-            cancel_submit = st.form_submit_button("← Review Responses")
-        
-        if final_submit:
-            # Submit the feedback
-            success = complete_external_stakeholder_feedback(token_data['request_id'], responses)
-            if success:
-                st.success("🎉 Thank you! Your feedback has been submitted successfully.")
-                st.session_state["external_token_data"]["status"] = "completed"
-                st.session_state["show_submit_confirmation"] = False
-                # Clear responses
-                if "external_responses" in st.session_state:
-                    del st.session_state["external_responses"]
-                st.rerun()
-            else:
-                st.error("Failed to submit feedback. Please try again.")
-        
-        if cancel_submit:
-            st.session_state["show_submit_confirmation"] = False
-            st.rerun()
 
 # Navigation
 st.markdown("---")
-col1, col2 = st.columns(2)
-
-with col1:
-    if st.button("← Back to Login"):
-        # Clear external session data  
-        st.session_state["external_authenticated"] = False
-        st.session_state["external_token_data"] = None
-        st.session_state["login_type"] = None
-        if "external_responses" in st.session_state:
-            del st.session_state["external_responses"]
-        st.switch_page("login.py")
-
-with col2:
-    if st.button("🏠 Exit to Main Login"):
-        # Clear all external session data
-        st.session_state["external_authenticated"] = False
-        st.session_state["external_token_data"] = None
-        st.session_state["login_type"] = None
-        if "external_responses" in st.session_state:
-            del st.session_state["external_responses"]
-        if "show_decline_form" in st.session_state:
-            del st.session_state["show_decline_form"]
-        if "show_submit_confirmation" in st.session_state:
-            del st.session_state["show_submit_confirmation"]
-        st.switch_page("login.py")
+if st.button("← Return to Login"):
+    # Clear external session data  
+    st.session_state["external_authenticated"] = False
+    st.session_state["external_token_data"] = None
+    st.session_state["login_type"] = None
+    if "external_responses" in st.session_state:
+        del st.session_state["external_responses"]
+    if "show_decline_form" in st.session_state:
+        del st.session_state["show_decline_form"]
+    st.switch_page("login.py")
 
 # Help section
 with st.expander("❓ Need Help?"):
@@ -288,6 +218,3 @@ with st.expander("❓ Need Help?"):
     - Individual responses are not linked to your identity
     """)
 
-# Footer
-st.markdown("---")
-st.caption(f"Providing feedback for: {token_data['requester_name']} | {token_data['cycle_name']}")

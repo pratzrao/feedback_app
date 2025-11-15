@@ -14,8 +14,11 @@ st.set_page_config(
     page_title="External Stakeholder Login", page_icon="🤝", layout="centered"
 )
 
-# Display logo and title
-st.image("assets/login_logo.jpg", width=200)
+# Display logo and title with error handling
+try:
+    st.image("assets/login_logo.jpg", width=200)
+except FileNotFoundError:
+    st.markdown('<div style="width: 200px; height: 100px; background-color: #1E4796; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; font-weight: bold;">Insight 360°</div>', unsafe_allow_html=True)
 st.title("External Stakeholder Login")
 
 # Initialize session state
@@ -138,4 +141,4 @@ with st.expander("❓ Need Help?"):
 
 # Footer
 st.markdown("---")
-st.caption("360° Feedback System - External Stakeholder Access")
+st.caption("Insight 360° - External Stakeholder Access")

@@ -6,9 +6,13 @@ from services.db_helper import (
     reject_external_stakeholder_request,
 )
 
-# Display logo
-st.image("assets/login_logo.jpg", width=200)
-st.title("360° Feedback System")
+# Display logo with error handling
+try:
+    st.image("assets/login_logo.jpg", width=200)
+except FileNotFoundError:
+    st.markdown('<div style="width: 200px; height: 100px; background-color: #1E4796; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; font-weight: bold;">Insight 360°</div>', unsafe_allow_html=True)
+
+st.title("Insight 360°")
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -38,7 +42,7 @@ if not st.session_state["authenticated"]:
                 st.rerun()
 
         st.markdown("---")
-        st.info("**Employees**: Use your regular company email to log in.")
+        st.info("**Tech4Dev Employees**: Use your regular company email to log in.")
         st.info(
             "**External Stakeholders**: Use the email and token received in your invitation."
         )

@@ -48,7 +48,7 @@ with tab1:
         u2.email as reviewer_email,
         u2.vertical as reviewer_vertical,
         fr.relationship_type,
-        fr.status,
+        fr.workflow_state as status,
         fr.approval_status,
         u3.first_name || ' ' || u3.last_name as approved_by_name,
         fr.created_at,

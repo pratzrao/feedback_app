@@ -548,7 +548,7 @@ def create_feedback_requests_with_approval_OLD(requester_id, reviewer_data):
         return False, str(e)
 
 def get_pending_approvals_for_manager(manager_id):
-    """Get feedback requests pending approval for a manager."""
+    """Get feedback requests pending approval for a manager for the current active cycle only."""
     conn = get_connection()
     query = """
         SELECT 
@@ -568,7 +568,10 @@ def get_pending_approvals_for_manager(manager_id):
         JOIN users req ON fr.requester_id = req.user_type_id
         LEFT JOIN users rev ON fr.reviewer_id = rev.user_type_id
         JOIN users mgr ON req.reporting_manager_email = mgr.email
-        WHERE mgr.user_type_id = ? AND fr.approval_status = 'pending'
+        JOIN review_cycles rc ON fr.cycle_id = rc.cycle_id
+        WHERE mgr.user_type_id = ? 
+            AND fr.approval_status = 'pending' 
+            AND rc.is_active = 1
         ORDER BY fr.created_at ASC
     """
     try:
@@ -791,7 +794,7 @@ def submit_final_feedback(request_id, responses):
         return False
 
 def get_anonymized_feedback_for_user(user_id):
-    """Get completed feedback received by a user (anonymized - no reviewer names)."""
+    """Get completed feedback received by a user (anonymized - no reviewer names) for the current active cycle only."""
     conn = get_connection()
     query = """
         SELECT fr.request_id, fr.relationship_type, fr.completed_at,
@@ -799,7 +802,10 @@ def get_anonymized_feedback_for_user(user_id):
         FROM feedback_requests fr
         JOIN feedback_responses fres ON fr.request_id = fres.request_id
         JOIN feedback_questions fq ON fres.question_id = fq.question_id
-        WHERE fr.requester_id = ? AND fr.workflow_state = 'completed'
+        JOIN review_cycles rc ON fr.cycle_id = rc.cycle_id
+        WHERE fr.requester_id = ? 
+            AND fr.workflow_state = 'completed'
+            AND rc.is_active = 1
         ORDER BY fr.request_id, fq.sort_order ASC
     """
     try:
@@ -825,7 +831,7 @@ def get_anonymized_feedback_for_user(user_id):
         return {}
 
 def get_feedback_progress_for_user(user_id):
-    """Get feedback request progress for a user showing anonymized completion status."""
+    """Get feedback request progress for a user showing anonymized completion status for the current active cycle only."""
     conn = get_connection()
     query = """
         SELECT 
@@ -834,7 +840,10 @@ def get_feedback_progress_for_user(user_id):
             COALESCE(SUM(CASE WHEN fr.approval_status = 'approved' THEN 1 ELSE 0 END), 0) as pending_requests,
             COALESCE(SUM(CASE WHEN fr.approval_status = 'pending' THEN 1 ELSE 0 END), 0) as awaiting_approval
         FROM feedback_requests fr
-        WHERE fr.requester_id = ? AND fr.approval_status != 'rejected'
+        JOIN review_cycles rc ON fr.cycle_id = rc.cycle_id
+        WHERE fr.requester_id = ? 
+            AND fr.approval_status != 'rejected'
+            AND rc.is_active = 1
     """
     try:
         result = conn.execute(query, (user_id,))
@@ -1600,18 +1609,31 @@ def create_feedback_request_fixed(requester_id, reviewer_data):
                     (cycle_id, requester_id, reviewer_id, relationship_type),
                 )
             else:
-                # External email; also guard against nominating manager email
-                if reviewer_id.strip().lower() == manager_email.strip().lower():
-                    return False, f"You cannot nominate your direct manager ({reviewer_id}) as an external stakeholder."
+                # External stakeholder data (email + names) or just email (legacy)
+                if isinstance(reviewer_id, dict):
+                    # New format with names
+                    external_email = reviewer_id['email']
+                    external_first_name = reviewer_id['first_name']
+                    external_last_name = reviewer_id['last_name']
+                else:
+                    # Legacy format (just email)
+                    external_email = reviewer_id
+                    external_first_name = None
+                    external_last_name = None
+                
+                # Guard against nominating manager email
+                if external_email.strip().lower() == manager_email.strip().lower():
+                    return False, f"You cannot nominate your direct manager ({external_email}) as an external stakeholder."
+                
                 conn.execute(
                     """
                     INSERT INTO feedback_requests
-                    (cycle_id, requester_id, external_reviewer_email, relationship_type,
-                     workflow_state, approval_status, reviewer_status,
-                     counts_toward_limit, is_active)
-                    VALUES (?, ?, ?, ?, 'pending_manager_approval', 'pending', 'pending_acceptance', 1, 1)
+                    (cycle_id, requester_id, external_reviewer_email, external_stakeholder_first_name, 
+                     external_stakeholder_last_name, relationship_type, workflow_state, approval_status, 
+                     reviewer_status, counts_toward_limit, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, 'pending_manager_approval', 'pending', 'pending_acceptance', 1, 1)
                     """,
-                    (cycle_id, requester_id, reviewer_id, relationship_type),
+                    (cycle_id, requester_id, external_email, external_first_name, external_last_name, relationship_type),
                 )
 
         conn.commit()
@@ -1644,7 +1666,12 @@ def create_feedback_request_fixed(requester_id, reviewer_data):
                         ).fetchone()
                         if nm:
                             nominees.append({"reviewer_name": f"{nm[0]} {nm[1]}", "relationship_type": relationship_type})
+                    elif isinstance(reviewer_id, dict):
+                        # New format with names
+                        reviewer_display_name = f"{reviewer_id['first_name']} {reviewer_id['last_name']} ({reviewer_id['email']})"
+                        nominees.append({"reviewer_name": reviewer_display_name, "relationship_type": relationship_type})
                     else:
+                        # Legacy format (just email)
                         nominees.append({"reviewer_name": reviewer_id, "relationship_type": relationship_type})
 
                 # Send manager approval email immediately (emails are now queued)
@@ -2273,7 +2300,7 @@ def get_users_for_selection_with_limits(exclude_user_id=None, requester_user_id=
     return users
 
 def get_pending_reviewer_requests(user_id):
-    """Get feedback requests where user is the reviewer and needs to accept/reject."""
+    """Get feedback requests where user is the reviewer and needs to accept/reject for the current active cycle only."""
     conn = get_connection()
     try:
         query = """
@@ -2283,7 +2310,10 @@ def get_pending_reviewer_requests(user_id):
             FROM feedback_requests fr
             JOIN users req ON fr.requester_id = req.user_type_id
             JOIN review_cycles rc ON fr.cycle_id = rc.cycle_id
-            WHERE fr.reviewer_id = ? AND fr.approval_status = 'approved' AND fr.reviewer_status = 'pending_acceptance'
+            WHERE fr.reviewer_id = ? 
+                AND fr.approval_status = 'approved' 
+                AND fr.reviewer_status = 'pending_acceptance'
+                AND rc.is_active = 1
             ORDER BY fr.created_at ASC
         """
         result = conn.execute(query, (user_id,))
@@ -2710,11 +2740,11 @@ def process_external_stakeholder_invitations(request_id):
     
     conn = get_connection()
     try:
-        # Get request details
+        # Get request details including external stakeholder names
         query = """
             SELECT fr.external_reviewer_email, fr.relationship_type, fr.cycle_id,
                    req.first_name, req.last_name, req.vertical,
-                   rc.cycle_display_name
+                   rc.cycle_display_name, fr.external_stakeholder_first_name, fr.external_stakeholder_last_name
             FROM feedback_requests fr
             JOIN users req ON fr.requester_id = req.user_type_id
             JOIN review_cycles rc ON fr.cycle_id = rc.cycle_id
@@ -2726,8 +2756,9 @@ def process_external_stakeholder_invitations(request_id):
         if not request_data:
             return False, "External request not found"
         
-        external_email, relationship_type, cycle_id, req_first, req_last, req_vertical, cycle_name = request_data
+        external_email, relationship_type, cycle_id, req_first, req_last, req_vertical, cycle_name, ext_first, ext_last = request_data
         requester_name = f"{req_first} {req_last}"
+        external_stakeholder_name = f"{ext_first} {ext_last}".strip() if ext_first and ext_last else ""
         
         # Generate token
         token = create_external_stakeholder_token(external_email, request_id, cycle_id)
@@ -2736,7 +2767,8 @@ def process_external_stakeholder_invitations(request_id):
         
         # Send email invitation
         email_sent = send_external_stakeholder_invitation(
-            external_email, requester_name, req_vertical, cycle_name, token
+            external_email, requester_name, req_vertical, cycle_name, token, 
+            external_stakeholder_name=external_stakeholder_name
         )
         
         if email_sent:

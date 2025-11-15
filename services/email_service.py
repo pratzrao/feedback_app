@@ -76,43 +76,62 @@ def get_sender_email():
 
 
 def log_email_sent(
-    to_email: str, subject: str, email_type: str, success: bool, error_msg: str = None
+    to_email: str, 
+    subject: str, 
+    email_type: str, 
+    success: bool, 
+    error_msg: str = None,
+    recipient_name: str = None,
+    cycle_id: int = None,
+    request_id: int = None,
+    initiated_by: int = None
 ):
-    """Log sent email to database for tracking and debugging."""
+    """Enhanced email logging to the new email_logs structure."""
     try:
-        conn = sqlite3.connect("feedback_app.db")
-        cursor = conn.cursor()
-
-        # Create table if it doesn't exist
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS sent_emails_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                to_email TEXT NOT NULL,
-                subject TEXT NOT NULL,
-                email_type TEXT NOT NULL,
-                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                success BOOLEAN NOT NULL,
-                error_message TEXT,
-                sender_email TEXT
+        # Use centralized email logging service
+        from .email_logging import log_email_enhanced, log_email_recipient_details
+        
+        # Determine status based on success
+        status = "sent" if success else "failed"
+        
+        # Categorize email type - automation emails are system-generated
+        if email_type in ['external_stakeholder_invite', 'manager_approval_notification', 'reviewer_acceptance', 'feedback_reminder']:
+            email_category = 'automation'
+        else:
+            email_category = 'targeted'
+        
+        # Log the email using centralized service
+        log_id = log_email_enhanced(
+            email_type=email_type,
+            subject=subject,
+            status=status,
+            email_category=email_category,
+            recipient_email=to_email,
+            recipient_name=recipient_name or "Unknown Recipient",
+            initiated_by=initiated_by,
+            cycle_id=cycle_id,
+            request_id=request_id
+        )
+        
+        # Log recipient details if we got a log ID back
+        if log_id and to_email:
+            log_email_recipient_details(
+                log_id=log_id,
+                user_id=initiated_by or 0,
+                email=to_email,
+                name=recipient_name or "Unknown Recipient",
+                status="delivered" if success else "failed"
             )
-        """
-        )
-
-        # Insert log entry
-        cursor.execute(
-            """
-            INSERT INTO sent_emails_log 
-            (to_email, subject, email_type, success, error_message, sender_email)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """,
-            (to_email, subject, email_type, success, error_msg, get_sender_email()),
-        )
-
-        conn.commit()
-        conn.close()
+        
     except Exception as e:
-        logger.warning(f"Failed to log email: {e}")
+        logger.warning(f"Failed to log email with enhanced structure: {e}")
+        
+        # Fallback to basic logging using centralized service
+        try:
+            from .email_logging import log_email_basic
+            log_email_basic(email_type, subject, "sent" if success else "failed", to_email)
+        except Exception as fallback_e:
+            logger.error(f"Even fallback email logging failed: {fallback_e}")
 
 
 def _send_email_smtp(
@@ -159,6 +178,10 @@ def send_email(
     html_body: str,
     text_body: Optional[str] = None,
     email_type: str = "general",
+    recipient_name: str = None,
+    cycle_id: int = None,
+    request_id: int = None,
+    initiated_by: int = None,
 ) -> bool:
     """
     Queue email for background processing to avoid blocking UI.
@@ -269,6 +292,10 @@ def send_external_stakeholder_invite(
     token: str,
     feedback_deadline: str,
     requester_vertical: str = "",
+    external_stakeholder_name: str = "",
+    cycle_id: int = None,
+    request_id: int = None,
+    initiated_by: int = None,
 ) -> bool:
     """Send invitation email to external stakeholder with token-based access."""
 
@@ -284,6 +311,8 @@ def send_external_stakeholder_invite(
         <style>
             body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
             .header {{ background-color: #1E4796; color: white; padding: 20px; text-align: center; }}
+            .header h1 {{ margin: 0; font-size: 24px; }}
+            .header h2 {{ margin: 5px 0 0 0; font-size: 18px; opacity: 0.9; }}
             .content {{ padding: 20px; }}
             .token-box {{ background-color: #f0f0f0; padding: 15px; border-left: 4px solid #1E4796; margin: 20px 0; }}
             .steps {{ background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; }}
@@ -292,11 +321,12 @@ def send_external_stakeholder_invite(
     </head>
     <body>
         <div class="header">
-            <h1>360° Feedback Request</h1>
+            <h1>Insight 360°</h1>
+            <h2>Feedback Request</h2>
         </div>
         
         <div class="content">
-            <h2>Hi there,</h2>
+            <h2>Hi {external_stakeholder_name if external_stakeholder_name else "there"},</h2>
             
             <p><strong>{requester_name}</strong> ({requester_designation}{f", {requester_vertical}" if requester_vertical else ""}) 
             has requested your feedback as part of their 360-degree review at Tech4Dev.</p>
@@ -339,16 +369,16 @@ def send_external_stakeholder_invite(
         </div>
         
         <div class="footer">
-            <p>This is an automated message from the Tech4Dev 360° Feedback System.</p>
+            <p>This is an automated message from the Tech4Dev Insight 360°.</p>
         </div>
     </body>
     </html>
     """
 
     text_body = f"""
-    360° Feedback Request from {requester_name}
+    Feedback Request from {requester_name}
 
-    Hi there,
+    Hi {external_stakeholder_name if external_stakeholder_name else "there"},
 
     {requester_name} ({requester_designation}{f", {requester_vertical}" if requester_vertical else ""}) has requested your feedback as part of their 360-degree review at Tech4Dev.
 
@@ -374,7 +404,15 @@ def send_external_stakeholder_invite(
     """
 
     return send_email(
-        external_email, subject, html_body, text_body, "external_stakeholder_invite"
+        external_email, 
+        subject, 
+        html_body, 
+        text_body, 
+        "external_stakeholder_invite",
+        recipient_name=external_stakeholder_name,
+        cycle_id=cycle_id,
+        request_id=request_id,
+        initiated_by=initiated_by
     )
 
 
@@ -401,6 +439,8 @@ def send_nominee_invite(
         <style>
             body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
             .header {{ background-color: #1E4796; color: white; padding: 20px; text-align: center; }}
+            .header h1 {{ margin: 0; font-size: 24px; }}
+            .header h2 {{ margin: 5px 0 0 0; font-size: 18px; opacity: 0.9; }}
             .content {{ padding: 20px; }}
             .info-box {{ background-color: #f0f8ff; padding: 15px; border-left: 4px solid #1E4796; margin: 20px 0; }}
             .footer {{ background-color: #f0f0f0; padding: 10px; text-align: center; font-size: 12px; }}
@@ -408,7 +448,8 @@ def send_nominee_invite(
     </head>
     <body>
         <div class="header">
-            <h1>360° Feedback Request</h1>
+            <h1>Insight 360°</h1>
+            <h2>Feedback Request</h2>
         </div>
         
         <div class="content">
@@ -422,25 +463,23 @@ def send_nominee_invite(
             
             <p><strong>Approve the nomination and fill out the form!</strong></p>
             
-            <p>Your feedback will remain confidential and will be used to support professional development. If you have any questions, feel free to reach out.</p>
+            <p>Your feedback will remain confidential and will be used to support professional development. If you have any questions, feel free to reach out to diana@projecttech4dev.org.</p>
             
             <p>Thanks for your time and input!</p>
-            
-            <p>Best,</p>
             
             <p>Best regards,<br>
             Talent Management</p>
         </div>
         
         <div class="footer">
-            <p>This is an automated message from the Tech4Dev 360° Feedback System.</p>
+            <p>This is an automated message from the Tech4Dev Insight 360°.</p>
         </div>
     </body>
     </html>
     """
 
     text_body = f"""
-    360° Feedback Request
+    Feedback Request
 
     Hi {reviewer_name},
 
@@ -494,7 +533,9 @@ def send_manager_approval_request(
     <head>
         <style>
             body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .header {{ background-color: #E55325; color: white; padding: 20px; text-align: center; }}
+            .header {{ background-color: #1E4796; color: white; padding: 20px; text-align: center; }}
+            .header h1 {{ margin: 0; font-size: 24px; }}
+            .header h2 {{ margin: 5px 0 0 0; font-size: 18px; opacity: 0.9; }}
             .content {{ padding: 20px; }}
             .nominees-box {{ background-color: #fff8f0; padding: 15px; border-left: 4px solid #E55325; margin: 20px 0; }}
             .footer {{ background-color: #f0f0f0; padding: 10px; text-align: center; font-size: 12px; }}
@@ -502,7 +543,8 @@ def send_manager_approval_request(
     </head>
     <body>
         <div class="header">
-            <h1>Nomination Approval Required</h1>
+            <h1>Insight 360°</h1>
+            <h2>Nomination Approval Required</h2>
         </div>
         
         <div class="content">
@@ -539,7 +581,7 @@ def send_manager_approval_request(
         </div>
         
         <div class="footer">
-            <p>This is an automated message from the Tech4Dev 360° Feedback System.</p>
+            <p>This is an automated message from the Tech4Dev Insight 360°.</p>
         </div>
     </body>
     </html>
@@ -589,7 +631,9 @@ def send_nomination_approved(
     <head>
         <style>
             body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .header {{ background-color: #28a745; color: white; padding: 20px; text-align: center; }}
+            .header {{ background-color: #1E4796; color: white; padding: 20px; text-align: center; }}
+            .header h1 {{ margin: 0; font-size: 24px; }}
+            .header h2 {{ margin: 5px 0 0 0; font-size: 18px; opacity: 0.9; }}
             .content {{ padding: 20px; }}
             .success-box {{ background-color: #f0fff0; padding: 15px; border-left: 4px solid #28a745; margin: 20px 0; }}
             .footer {{ background-color: #f0f0f0; padding: 10px; text-align: center; font-size: 12px; }}
@@ -597,7 +641,8 @@ def send_nomination_approved(
     </head>
     <body>
         <div class="header">
-            <h1>Nominations Approved ✅</h1>
+            <h1>Insight 360°</h1>
+            <h2>Nominations Approved ✅</h2>
         </div>
         
         <div class="content">
@@ -626,7 +671,7 @@ def send_nomination_approved(
         </div>
         
         <div class="footer">
-            <p>This is an automated message from the Tech4Dev 360° Feedback System.</p>
+            <p>This is an automated message from the Tech4Dev Insight 360°.</p>
         </div>
     </body>
     </html>
@@ -656,7 +701,9 @@ def send_nomination_rejected(
     <head>
         <style>
             body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .header {{ background-color: #dc3545; color: white; padding: 20px; text-align: center; }}
+            .header {{ background-color: #1E4796; color: white; padding: 20px; text-align: center; }}
+            .header h1 {{ margin: 0; font-size: 24px; }}
+            .header h2 {{ margin: 5px 0 0 0; font-size: 18px; opacity: 0.9; }}
             .content {{ padding: 20px; }}
             .rejection-box {{ background-color: #fff5f5; padding: 15px; border-left: 4px solid #dc3545; margin: 20px 0; }}
             .footer {{ background-color: #f0f0f0; padding: 10px; text-align: center; font-size: 12px; }}
@@ -664,7 +711,8 @@ def send_nomination_rejected(
     </head>
     <body>
         <div class="header">
-            <h1>Nominations Need Revision</h1>
+            <h1>Insight 360°</h1>
+            <h2>Nominations Need Revision</h2>
         </div>
         
         <div class="content">
@@ -693,7 +741,7 @@ def send_nomination_rejected(
         </div>
         
         <div class="footer">
-            <p>This is an automated message from the Tech4Dev 360° Feedback System.</p>
+            <p>This is an automated message from the Tech4Dev Insight 360°.</p>
         </div>
     </body>
     </html>
@@ -729,7 +777,8 @@ def send_feedback_submitted_notification(
     </head>
     <body>
         <div class="header">
-            <h1>Feedback Received 📝</h1>
+            <h1>Insight 360°</h1>
+            <h2>Feedback Received 📝</h2>
         </div>
         
         <div class="content">
@@ -758,7 +807,7 @@ def send_feedback_submitted_notification(
         </div>
         
         <div class="footer">
-            <p>This is an automated message from the Tech4Dev 360° Feedback System.</p>
+            <p>This is an automated message from the Tech4Dev Insight 360°.</p>
         </div>
     </body>
     </html>
@@ -800,7 +849,9 @@ def send_cycle_deadline_reminder(
     <head>
         <style>
             body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .header {{ background-color: #ffc107; color: #333; padding: 20px; text-align: center; }}
+            .header {{ background-color: #1E4796; color: white; padding: 20px; text-align: center; }}
+            .header h1 {{ margin: 0; font-size: 24px; }}
+            .header h2 {{ margin: 5px 0 0 0; font-size: 18px; opacity: 0.9; }}
             .content {{ padding: 20px; }}
             .warning-box {{ background-color: #fff8e1; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; }}
             .footer {{ background-color: #f0f0f0; padding: 10px; text-align: center; font-size: 12px; }}
@@ -808,7 +859,8 @@ def send_cycle_deadline_reminder(
     </head>
     <body>
         <div class="header">
-            <h1>⏰ Deadline Reminder</h1>
+            <h1>Insight 360°</h1>
+            <h2>⏰ Deadline Reminder</h2>
         </div>
         
         <div class="content">
@@ -838,7 +890,7 @@ def send_cycle_deadline_reminder(
         </div>
         
         <div class="footer">
-            <p>This is an automated reminder from the Tech4Dev 360° Feedback System.</p>
+            <p>This is an automated reminder from the Tech4Dev Insight 360°.</p>
         </div>
     </body>
     </html>
@@ -918,6 +970,7 @@ def send_external_stakeholder_invitation(
     cycle_name,
     token,
     app_url="https://360feedbacktool.streamlit.app/",
+    external_stakeholder_name="",
 ):
     """Legacy function - redirects to new send_external_stakeholder_invite."""
     return send_external_stakeholder_invite(
@@ -928,6 +981,7 @@ def send_external_stakeholder_invitation(
         token=token,
         feedback_deadline="",
         requester_vertical=requester_vertical,
+        external_stakeholder_name=external_stakeholder_name,
     )
 
 
@@ -979,7 +1033,7 @@ def send_rejection_notice_email(requester_email, reviewer_name, rejection_reason
 
 def send_password_reset_email(email, first_name, reset_token):
     """Send password reset email with token."""
-    subject = "Password Reset - 360° Feedback System"
+    subject = "Password Reset - Insight 360°"
     html_body = f"""
     <!DOCTYPE html>
     <html>
@@ -987,6 +1041,8 @@ def send_password_reset_email(email, first_name, reset_token):
         <style>
             body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
             .header {{ background-color: #1E4796; color: white; padding: 20px; text-align: center; }}
+            .header h1 {{ margin: 0; font-size: 24px; }}
+            .header h2 {{ margin: 5px 0 0 0; font-size: 18px; opacity: 0.9; }}
             .content {{ padding: 20px; }}
             .token-box {{ background-color: #f0f0f0; padding: 15px; border-left: 4px solid #1E4796; margin: 20px 0; }}
             .footer {{ background-color: #f0f0f0; padding: 10px; text-align: center; font-size: 12px; }}
@@ -994,12 +1050,13 @@ def send_password_reset_email(email, first_name, reset_token):
     </head>
     <body>
         <div class="header">
-            <h1>Password Reset Request</h1>
+            <h1>Insight 360°</h1>
+            <h2>Password Reset Request</h2>
         </div>
         
         <div class="content">
             <h2>Hello {first_name},</h2>
-            <p>You have requested to reset your password for the 360° Feedback System.</p>
+            <p>You have requested to reset your password for Insight 360°.</p>
             
             <div class="token-box">
                 <h3>Your Reset Token:</h3>
@@ -1026,11 +1083,11 @@ def send_password_reset_email(email, first_name, reset_token):
             
             <p>If you have any issues, please contact your system administrator.</p>
             
-            <p>Best regards,<br>360° Feedback System</p>
+            <p>Best regards,<br>Insight 360°</p>
         </div>
         
         <div class="footer">
-            <p>This is an automated message from the Tech4Dev 360° Feedback System.</p>
+            <p>This is an automated message from the Tech4Dev Insight 360°.</p>
         </div>
     </body>
     </html>

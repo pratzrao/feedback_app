@@ -18,7 +18,7 @@ from services.db_helper import (
 from services.db_helper import create_feedback_request_fixed
 from utils.badge_utils import update_local_badge
 
-st.title("Request 360° Feedback")
+st.title("Request Feedback")
 
 # Add custom CSS for styling
 st.markdown(
@@ -263,7 +263,16 @@ internal_reviewers = valid_internal_reviewers
 
 # External stakeholder (disabled when no slots remain)
 if can_request_external and remaining_slots > 0:
-    external_reviewer = st.text_input("Enter email of external stakeholder (optional):")
+    st.markdown("**External Stakeholder Details (optional):**")
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        external_reviewer = st.text_input("Email address:", key="external_email")
+    with col2:
+        external_first_name = st.text_input("First name:", key="external_first_name")
+    with col3:
+        external_last_name = st.text_input("Last name:", key="external_last_name")
+    
     if external_reviewer:
         external_reviewer_clean = external_reviewer.strip().lower()
         already_nominated_lower = [
@@ -276,6 +285,7 @@ if can_request_external and remaining_slots > 0:
             direct_manager.get("email", "").lower() if direct_manager else ""
         )
 
+        # Validate that if email is provided, names are also provided
         if external_reviewer_clean == manager_email:
             st.error(
                 f"You cannot nominate your direct manager ({external_reviewer}) as an external stakeholder."
@@ -284,9 +294,17 @@ if can_request_external and remaining_slots > 0:
             st.error(
                 f"You have already nominated {external_reviewer}. Please enter a different email address."
             )
+        elif not external_first_name.strip() or not external_last_name.strip():
+            st.warning("⚠️ Please provide both first name and last name for the external stakeholder.")
         else:
+            # Store email and names together
+            external_stakeholder_data = {
+                'email': external_reviewer.strip(),
+                'first_name': external_first_name.strip(),
+                'last_name': external_last_name.strip()
+            }
             selected_reviewers.append(
-                (external_reviewer.strip(), "external_stakeholder")
+                (external_stakeholder_data, "external_stakeholder")
             )
 
 # Add selected internal reviewers to the list (with placeholder relationship)
@@ -380,7 +398,12 @@ else:
             )
             relationship_display = relationship_type.replace("_", " ").title()
             st.write(f" **{reviewer_info['name']}** - {relationship_display}")
+        elif isinstance(reviewer_identifier, dict):
+            # New external stakeholder format with names
+            display_name = f"{reviewer_identifier['first_name']} {reviewer_identifier['last_name']} ({reviewer_identifier['email']})"
+            st.write(f"**{display_name}** - External Stakeholder")
         else:
+            # Legacy external stakeholder format (just email)
             st.write(f"**{reviewer_identifier}** - External Stakeholder")
 
     if st.button(

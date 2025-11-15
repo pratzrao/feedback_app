@@ -44,8 +44,8 @@ conn = get_connection()
 
 
 def export_feedback(selected_cycle_ids):
-    # Convert cycle IDs to comma-separated string for LibSQL compatibility
-    cycle_ids_str = ",".join(str(cycle_id) for cycle_id in selected_cycle_ids)
+    # Create parameterized query with placeholders for cycle IDs
+    placeholders = ",".join("?" * len(selected_cycle_ids))
     query = f"""
         SELECT 
             fr.request_id,
@@ -69,10 +69,10 @@ def export_feedback(selected_cycle_ids):
         LEFT JOIN users rev ON fr.reviewer_id = rev.user_type_id
         JOIN feedback_responses resp ON fr.request_id = resp.request_id
         JOIN feedback_questions fq ON resp.question_id = fq.question_id
-        WHERE fr.workflow_state = 'completed' AND fr.cycle_id IN ({cycle_ids_str})
+        WHERE fr.workflow_state = 'completed' AND fr.cycle_id IN ({placeholders})
         ORDER BY rc.cycle_display_name, fr.request_id, fq.question_text
     """
-    rows = conn.execute(query).fetchall()
+    rows = conn.execute(query, selected_cycle_ids).fetchall()
     cols = [
         "request_id",
         "cycle_display_name",
@@ -95,8 +95,8 @@ def export_feedback(selected_cycle_ids):
 
 
 def export_nominations(selected_cycle_ids):
-    # Convert cycle IDs to comma-separated string for LibSQL compatibility
-    cycle_ids_str = ",".join(str(cycle_id) for cycle_id in selected_cycle_ids)
+    # Create parameterized query with placeholders for cycle IDs
+    placeholders = ",".join("?" * len(selected_cycle_ids))
     query = f"""
         SELECT 
             fr.request_id,
@@ -120,10 +120,10 @@ def export_nominations(selected_cycle_ids):
         JOIN review_cycles rc ON fr.cycle_id = rc.cycle_id
         JOIN users req ON fr.requester_id = req.user_type_id
         LEFT JOIN users rev ON fr.reviewer_id = rev.user_type_id
-        WHERE fr.cycle_id IN ({cycle_ids_str})
+        WHERE fr.cycle_id IN ({placeholders})
         ORDER BY rc.cycle_display_name, fr.created_at
     """
-    rows = conn.execute(query).fetchall()
+    rows = conn.execute(query, selected_cycle_ids).fetchall()
     cols = [
         "request_id",
         "cycle_display_name",
@@ -147,85 +147,106 @@ def export_nominations(selected_cycle_ids):
     return df
 
 
+if "export_data" not in st.session_state:
+    st.session_state.export_data = {}
+
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    if st.button("Export Feedback Data (CSV/XLSX)"):
+    st.subheader("Feedback Data")
+    if st.button("Generate Feedback Export", key="gen_feedback"):
         df = export_feedback(selected_ids)
         if df.empty:
             st.info("No completed feedback found for the selected cycles.")
+            st.session_state.export_data["feedback"] = None
         else:
-            # CSV
-            csv = df.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="Download Feedback CSV",
-                data=csv,
-                file_name=f"feedback_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv",
-            )
+            st.session_state.export_data["feedback"] = df
+            st.success("Feedback data prepared for export!")
 
-            # Excel
-            xls = BytesIO()
-            with pd.ExcelWriter(xls, engine="openpyxl") as writer:
-                df.to_excel(writer, index=False, sheet_name="Feedback")
-            xls.seek(0)
-            st.download_button(
-                label="Download Feedback Excel",
-                data=xls.getvalue(),
-                file_name=f"feedback_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+    if st.session_state.export_data.get("feedback") is not None:
+        df = st.session_state.export_data["feedback"]
+        
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv,
+            file_name=f"feedback_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            key="download_feedback_csv"
+        )
+
+        xls = BytesIO()
+        with pd.ExcelWriter(xls, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Feedback")
+        xls.seek(0)
+        st.download_button(
+            label="📊 Download Excel",
+            data=xls.getvalue(),
+            file_name=f"feedback_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_feedback_excel"
+        )
 
 with col2:
-    if st.button("Export Nominations (CSV/XLSX)"):
+    st.subheader("Nominations Data")
+    if st.button("Generate Nominations Export", key="gen_nominations"):
         df = export_nominations(selected_ids)
         if df.empty:
             st.info("No nominations found for the selected cycles.")
+            st.session_state.export_data["nominations"] = None
         else:
-            # CSV
-            csv = df.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="Download Nominations CSV",
-                data=csv,
-                file_name=f"nominations_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv",
-            )
+            st.session_state.export_data["nominations"] = df
+            st.success("Nominations data prepared for export!")
 
-            # Excel
-            xls = BytesIO()
-            with pd.ExcelWriter(xls, engine="openpyxl") as writer:
-                df.to_excel(writer, index=False, sheet_name="Nominations")
-            xls.seek(0)
-            st.download_button(
-                label="Download Nominations Excel",
-                data=xls.getvalue(),
-                file_name=f"nominations_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+    if st.session_state.export_data.get("nominations") is not None:
+        df = st.session_state.export_data["nominations"]
+        
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv,
+            file_name=f"nominations_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            key="download_nominations_csv"
+        )
+
+        xls = BytesIO()
+        with pd.ExcelWriter(xls, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Nominations")
+        xls.seek(0)
+        st.download_button(
+            label="📊 Download Excel",
+            data=xls.getvalue(),
+            file_name=f"nominations_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_nominations_excel"
+        )
 
 with col3:
-    if st.button("Export All (ZIP)"):
+    st.subheader("Combined Export")
+    if st.button("Generate All Data Export", key="gen_all"):
         df_feedback = export_feedback(selected_ids)
         df_noms = export_nominations(selected_ids)
+        
         if df_feedback.empty and df_noms.empty:
             st.info("No data found for the selected cycles.")
+            st.session_state.export_data["combined"] = None
         else:
             buffer = BytesIO()
             with ZipFile(buffer, "w", ZIP_DEFLATED) as zf:
                 if not df_feedback.empty:
-                    zf.writestr(
-                        "feedback.csv",
-                        df_feedback.to_csv(index=False),
-                    )
+                    zf.writestr("feedback.csv", df_feedback.to_csv(index=False))
                 if not df_noms.empty:
-                    zf.writestr(
-                        "nominations.csv",
-                        df_noms.to_csv(index=False),
-                    )
+                    zf.writestr("nominations.csv", df_noms.to_csv(index=False))
             buffer.seek(0)
-            st.download_button(
-                label="Download All (ZIP)",
-                data=buffer,
-                file_name=f"all_exports_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-                mime="application/zip",
-            )
+            st.session_state.export_data["combined"] = buffer.getvalue()
+            st.success("Combined export prepared!")
+
+    if st.session_state.export_data.get("combined") is not None:
+        st.download_button(
+            label="📦 Download ZIP",
+            data=st.session_state.export_data["combined"],
+            file_name=f"all_exports_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+            mime="application/zip",
+            key="download_combined_zip"
+        )

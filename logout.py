@@ -1,5 +1,5 @@
 """
-Logout page for 360° Feedback Application
+Logout page for Insight 360°
 Clears session state and redirects to login.
 """
 

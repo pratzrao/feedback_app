@@ -10,7 +10,7 @@ from services.db_helper import (
 from datetime import datetime, date
 
 st.set_page_config(
-    page_title="360° Feedback Application",
+    page_title="Insight 360°",
     page_icon="assets/favicon.png",
     layout="wide",
 )
@@ -248,12 +248,20 @@ span:has-text("•") {
 
 # Website-wide header
 if st.session_state.get("authenticated"):  # Only show header if authenticated
+    # Safe logo loading with error handling
+    try:
+        with open("assets/logo.png", "rb") as f:
+            logo_b64 = base64.b64encode(f.read()).decode("utf-8")
+        logo_html = f'<img src="data:image/png;base64,{logo_b64}" alt="Logo">'
+    except FileNotFoundError:
+        logo_html = '<div style="width: 40px; height: 40px; background-color: #1E4796; border-radius: 5px;"></div>'
+    
     st.markdown(
         f"""
         <div class="main-header">
-            <img src="data:image/png;base64,{base64.b64encode(open("assets/logo.png", "rb").read()).decode("utf-8")}" alt="Logo">
+            {logo_html}
             <div class="header-spacer"></div> <!-- Spacer for centering -->
-            <h2>360° Feedback Application</h2>
+            <h2>Insight 360°</h2>
             <div class="header-spacer"></div> <!-- Spacer for centering -->
         </div>
         """,
@@ -428,14 +436,9 @@ if st.session_state["authenticated"]:
                     icon=":material/mail:",
                 ),
                 st.Page(
-                    "app_pages/send_reminders.py",
-                    title=_badge_title("Send Reminders", False),
-                    icon=":material/notification_important:",
-                ),
-                st.Page(
-                    "app_pages/manual_reminders.py",
-                    title=_badge_title("Manual Reminders", False),
-                    icon=":material/email:",
+                    "app_pages/notification_history.py",
+                    title=_badge_title("Notification History", False),
+                    icon=":material/history:",
                 ),
             ],
             "Employee Management": [
