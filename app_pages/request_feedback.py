@@ -73,12 +73,12 @@ if user_id:
             "While there's no active cycle, here are the previous feedback cycles for reference:"
         )
         completed_cycles = [
-            cycle for cycle in all_cycles if cycle["status"] == "completed"
+            cycle for cycle in all_cycles if cycle["phase_status"] == "completed"
         ]
         for cycle in completed_cycles[:3]:  # Show last 3 cycles
             status_icon = "[Completed]"
             st.write(
-                f"{status_icon} **{cycle['cycle_display_name']}** ({cycle['cycle_year']} {cycle['cycle_quarter']}) - Status: {cycle['status']}"
+                f"{status_icon} **{cycle['cycle_display_name']}** ({cycle['cycle_year']} {cycle['cycle_quarter']}) - Status: {cycle['phase_status']}"
             )
     st.stop()
 

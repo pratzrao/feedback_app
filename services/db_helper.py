@@ -999,24 +999,26 @@ def mark_cycle_complete(cycle_id, completion_notes=""):
             print(f"Cycle {cycle_id} is already inactive")
             return False, f"Cycle '{cycle_info[1]}' is already inactive"
         
-        # Update cycle to completed status - use only guaranteed existing columns
+        # Update cycle to completed status - use only phase_status as the primary status column
         complete_query = """
             UPDATE review_cycles 
             SET is_active = 0, 
-                phase_status = 'completed',
-                status = 'completed'
+                phase_status = 'completed'
             WHERE cycle_id = ? AND is_active = 1
         """
         result = conn.execute(complete_query, (cycle_id,))
         conn.commit()
         
-        if result.rowcount > 0:
+        # Verify the update succeeded by re-querying (rowcount may not work reliably with Turso)
+        verify_query = "SELECT is_active, phase_status FROM review_cycles WHERE cycle_id = ?"
+        verify_result = conn.execute(verify_query, (cycle_id,))
+        updated_cycle = verify_result.fetchone()
+        
+        if updated_cycle and updated_cycle[0] == 0 and updated_cycle[1] == 'completed':
             print(f"Cycle {cycle_id} marked as complete")
             return True, f"Cycle '{cycle_info[1]}' marked as complete successfully"
-        # If rowcount is 0 here, it means the cycle was active but the update failed for some other reason.
-        # The earlier check for cycle_info[2] == 0 already covers the "already inactive" case.
-        # So, if we reach here with rowcount 0, it's a genuine failure.
-        return False, f"Failed to update cycle '{cycle_info[1]}' for an unknown reason."
+        else:
+            return False, f"Failed to update cycle '{cycle_info[1]}' - verification failed."
             
     except Exception as e:
         print(f"Error marking cycle complete: {e}")
@@ -1202,7 +1204,7 @@ def get_all_cycles():
     query = """
         SELECT cycle_id, cycle_name, cycle_display_name, cycle_description, 
                cycle_year, cycle_quarter, phase_status, is_active,
-               nomination_start_date, nomination_deadline, feedback_deadline, created_at, status
+               nomination_start_date, nomination_deadline, feedback_deadline, created_at
         FROM review_cycles 
         ORDER BY created_at DESC
     """
@@ -1222,8 +1224,7 @@ def get_all_cycles():
                 'nomination_start_date': row[8],
                 'nomination_deadline': row[9],
                 'feedback_deadline': row[10],
-                'created_at': row[11],
-                'status': row[12]
+                'created_at': row[11]
             })
         return cycles
     except Exception as e:
@@ -1376,16 +1377,16 @@ def get_feedback_by_cycle(user_id, cycle_id=None):
         return []
 
 def update_cycle_status(cycle_id, new_status):
-    """Update the status of a specific review cycle."""
+    """Update the phase_status of a specific review cycle."""
     conn = get_connection()
     try:
-        update_query = "UPDATE review_cycles SET status = ? WHERE cycle_id = ?"
+        update_query = "UPDATE review_cycles SET phase_status = ? WHERE cycle_id = ?"
         conn.execute(update_query, (new_status, cycle_id))
         conn.commit()
-        print(f"Cycle {cycle_id} status updated to '{new_status}'.")
+        print(f"Cycle {cycle_id} phase_status updated to '{new_status}'.")
         return True
     except Exception as e:
-        print(f"Error updating cycle status: {e}")
+        print(f"Error updating cycle phase_status: {e}")
         conn.rollback()
         return False
 

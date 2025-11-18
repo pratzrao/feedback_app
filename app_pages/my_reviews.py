@@ -16,7 +16,7 @@ if not active_cycle:
         st.info("While there's no active cycle, here are the previous feedback cycles for reference:")
         for cycle in all_cycles[:3]:  # Show last 3 cycles
             status_icon = "[Active]" if cycle['is_active'] else "[Completed]"
-            st.write(f"{status_icon} **{cycle['cycle_display_name']}** ({cycle['cycle_year']} {cycle['cycle_quarter']}) - Status: {cycle['status']}")
+            st.write(f"{status_icon} **{cycle['cycle_display_name']}** ({cycle['cycle_year']} {cycle['cycle_quarter']}) - Status: {cycle['phase_status']}")
 else:
     st.info(f"**Active Cycle:** {active_cycle['cycle_display_name'] or active_cycle['cycle_name']} | **Feedback Deadline:** {active_cycle['feedback_deadline']}")
 

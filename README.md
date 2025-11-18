@@ -86,15 +86,6 @@ email_password = "your-app-password"
 from_email = "hr@company.com"  # optional; defaults to email_user
 ```
 
-### 3. Initialize Database
-```bash
-# Create database schema
-python setup/create_schema.py
-
-# Insert initial data (roles, questions, users)
-python setup/simple_insert.py
-```
-
 ### 4. Run Application
 ```bash
 streamlit run main.py
@@ -451,7 +442,6 @@ External stakeholders can be nominated by employees (subject to manager approval
   - Notifications center + reminders under Communication.
 
 Known considerations
-- Align `email_logs` schema with runtime fields (this repo’s `setup/create_schema.py` is already aligned).
 - Missing DOJ is treated as “not blocked” for now; set it in DB to enforce strict eligibility.
 - Excel export requires `openpyxl` (included in requirements).
 
@@ -489,11 +479,7 @@ feedback_app/
 │   ├── current_feedback.py         # Employees: current cycle results
 │   ├── previous_feedback.py        # Employees: past results
 │   ├── external_feedback.py        # External stakeholders: provide feedback
-│   └── external_auth.py            # External auth helpers (if used)
-├── setup/
-│   ├── create_schema.py            # Base schema (idempotent)
-│   ├── fix_workflow_schema.py      # Workflow/external schema fixes & triggers
-│   └── simple_insert.py            # Seed roles/users/questions
+│   └── external_auth.py            # External 
 ├── testing/
 │   └── generate_manual_test_plan.py# Writes Manual_Test_Plan.xlsx
 └── .streamlit/
@@ -505,7 +491,7 @@ feedback_app/
 - Navigation: HR role → Communication → Email Notifications / Send Reminders
 - SMTP Setup: configure `[email]` in `.streamlit/secrets.toml` (SendGrid, Gmail, etc.)
   
-- Email Logs: The app maintains a lightweight `email_logs` table for history. If you initialized your DB before this feature, run `python setup/create_schema.py` to add it.
+- Email Logs: The app maintains a lightweight `email_logs` table for history.
 - Limitations: The "schedule for later" controls are UI-only for now; background scheduling/cron is not yet wired up.
 ```
 
